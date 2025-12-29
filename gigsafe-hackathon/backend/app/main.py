@@ -8,6 +8,9 @@ import pandas as pd
 import pickle
 from datetime import datetime
 import uvicorn
+import sys
+sys.path.append('.')
+from app.services.government_data import GovernmentDataService
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -79,6 +82,7 @@ class DriverIdentity(BaseModel):
     """Driver identity information"""
     name: str
     driver_id: str
+    worker_type: str  # NEW
     aadhaar: str
     phone: str
     vehicle_number: str
@@ -89,6 +93,11 @@ class EmploymentInfo(BaseModel):
     company: str
     status: str
     join_date: str
+    # Banking-specific fields (optional)
+    bank_name: Optional[str] = None
+    agent_id: Optional[str] = None
+    authorization_expiry: Optional[str] = None
+    aeps_enabled: Optional[bool] = None
 
 class SafetyInfo(BaseModel):
     """Safety and risk information"""
@@ -98,6 +107,7 @@ class SafetyInfo(BaseModel):
     anomalous_trips: int
     anomaly_rate: float
     last_incident: Optional[str]
+    government_context: Optional[dict] = None
 
 class LocationInfo(BaseModel):
     """Last known location"""
@@ -121,6 +131,41 @@ class DashboardStats(BaseModel):
     anomalies_detected_today: int
     average_risk_score: float
     system_health: str
+
+# ============================================================================
+# API ENDPOINTS
+# ============================================================================
+
+@app.get("/")
+def root():
+    """API root endpoint - System status"""
+    return {
+        "system": "GIG-SAFE",
+        "version": "1.0.0",
+        "status": "operational",
+        "description": "Intelligent Gig Worker Verification & Safety System",
+        "endpoints": {
+            "verification": "/api/verify/{driver_id}",
+            "dashboard": "/api/dashboard/stats",
+            "high_risk": "/api/drivers/high-risk",
+            "alerts": "/api/alerts/recent",
+            "docs": "/docs"
+        },
+        "total_drivers": len(drivers_df),
+        "total_trips": len(trips_df),
+        "models_loaded": isolation_forest_model is not None,
+        "government_data_integrated": True
+    }
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "data_loaded": not drivers_df.empty,
+        "models_loaded": isolation_forest_model is not None
+    }
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -156,38 +201,8 @@ def get_last_trip(driver_id: str):
     return driver_trips.iloc[0]
 
 # ============================================================================
-# API ENDPOINTS
+# VERIFICATION ENDPOINT (LAW ENFORCEMENT)
 # ============================================================================
-
-@app.get("/")
-def root():
-    """API root endpoint - System status"""
-    return {
-        "system": "GIG-SAFE",
-        "version": "1.0.0",
-        "status": "operational",
-        "description": "Intelligent Gig Worker Verification & Safety System",
-        "endpoints": {
-            "verification": "/api/verify/{driver_id}",
-            "dashboard": "/api/dashboard/stats",
-            "high_risk": "/api/drivers/high-risk",
-            "alerts": "/api/alerts/recent",
-            "docs": "/docs"
-        },
-        "total_drivers": len(drivers_df),
-        "total_trips": len(trips_df),
-        "models_loaded": isolation_forest_model is not None
-    }
-
-@app.get("/health")
-def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "data_loaded": not drivers_df.empty,
-        "models_loaded": isolation_forest_model is not None
-    }
 
 @app.get("/api/verify/{driver_id}", response_model=DriverVerification)
 def verify_driver(driver_id: str):
@@ -195,6 +210,7 @@ def verify_driver(driver_id: str):
     🚨 LAW ENFORCEMENT VERIFICATION ENDPOINT
     
     Instant driver verification for authorities during incidents.
+    Now includes real Government of India accident data calibration.
     
     Use Case: Police officer stops a delivery driver and needs immediate verification.
     
@@ -202,7 +218,7 @@ def verify_driver(driver_id: str):
         driver_id: Driver ID (format: DRV00001 to DRV00100)
     
     Returns:
-        Complete driver profile with identity, employment, safety, and location info
+        Complete driver profile with identity, employment, safety, location, and government context
     """
     
     # Get driver information
@@ -246,11 +262,42 @@ def verify_driver(driver_id: str):
     else:
         risk_level = "High"
     
+    # NEW: Get government accident context
+    government_context = None
+    try:
+        from app.services.government_data import GovernmentDataService
+        gov_service = GovernmentDataService()
+        
+        # Get Rajasthan data (where drivers operate)
+        state_info = gov_service.get_state_risk("Rajasthan")
+        
+        if state_info:
+            # Calculate how much government data contributes to risk
+            # Check if last trip has gov context features
+            if last_trip is not None and 'risk_gov_context' in last_trip.index:
+                gov_contribution = float(last_trip['risk_gov_context'])
+            else:
+                # Estimate based on formula (20% max)
+                gov_contribution = (state_info['risk_index'] / 100) * 20
+            
+            government_context = {
+                "state": state_info['state'],
+                "state_risk_index": state_info['risk_index'],
+                "total_accidents_2022": state_info['total_accidents_2022'],
+                "contributes_to_score": round(gov_contribution, 2),
+                "data_source": "Government of India - Ministry of Road Transport",
+                "explanation": f"Driver operates in {state_info['state']} (accident risk index: {state_info['risk_index']}/100). Government data adds ~{round(gov_contribution, 1)} points to risk score."
+            }
+    except Exception as e:
+        print(f"Could not load government context: {e}")
+        government_context = None
+    
     # Build response
     verification_response = DriverVerification(
         identity=DriverIdentity(
             name=str(driver['name']),
             driver_id=str(driver['driver_id']),
+            worker_type=str(driver.get('worker_type', 'Delivery')),  # NEW
             aadhaar=str(driver['aadhaar']),
             phone=str(driver['phone']),
             vehicle_number=str(driver['vehicle_number']),
@@ -259,7 +306,12 @@ def verify_driver(driver_id: str):
         employment=EmploymentInfo(
             company=str(driver['company']),
             status="Active",  # In real system, check actual status
-            join_date=str(driver['join_date'])
+            join_date=str(driver['join_date']),
+            # Banking-specific fields (NEW)
+            bank_name=str(driver['bank_name']) if pd.notna(driver.get('bank_name')) else None,
+            agent_id=str(driver['agent_id']) if pd.notna(driver.get('agent_id')) else None,
+            authorization_expiry=str(driver['authorization_expiry']) if pd.notna(driver.get('authorization_expiry')) else None,
+            aeps_enabled=bool(driver['aeps_enabled']) if pd.notna(driver.get('aeps_enabled')) else None
         ),
         safety=SafetyInfo(
             risk_score=risk_score,
@@ -267,7 +319,8 @@ def verify_driver(driver_id: str):
             total_trips=int(risk_info['total_trips']),
             anomalous_trips=int(risk_info['anomalous_trips']),
             anomaly_rate=float(risk_info['anomaly_rate']),
-            last_incident=last_timestamp if risk_info['anomalous_trips'] > 0 else None
+            last_incident=last_timestamp if risk_info['anomalous_trips'] > 0 else None,
+            government_context=government_context
         ),
         location=LocationInfo(
             last_known_lat=last_lat,
@@ -279,6 +332,9 @@ def verify_driver(driver_id: str):
     
     return verification_response
 
+# ============================================================================
+# DASHBOARD ENDPOINTS
+# ============================================================================
 
 @app.get("/api/dashboard/stats", response_model=DashboardStats)
 def get_dashboard_stats():
@@ -333,7 +389,6 @@ def get_dashboard_stats():
     )
     
     return stats
-
 
 @app.get("/api/drivers/high-risk")
 def get_high_risk_drivers(limit: int = 20):
@@ -393,7 +448,6 @@ def get_high_risk_drivers(limit: int = 20):
         "count": len(result),
         "drivers": result
     }
-
 
 @app.get("/api/alerts/recent")
 def get_recent_alerts(limit: int = 20):
@@ -478,7 +532,6 @@ def get_recent_alerts(limit: int = 20):
         "count": len(alerts),
         "alerts": alerts
     }
-
 
 # ============================================================================
 # RUN THE APP

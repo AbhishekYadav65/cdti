@@ -439,6 +439,13 @@
                 <div class="info-grid">
                     <div class="info-card">
                         <h3>👤 Identity Information</h3>
+                        ${data.identity.worker_type ? `
+                            <div style="background: ${data.identity.worker_type === 'Banking Agent' ? '#e6f3ff' : '#f0fff4'}; padding: 8px; border-radius: 5px; margin-bottom: 10px; text-align: center;">
+                                <strong style="color: ${data.identity.worker_type === 'Banking Agent' ? '#0066cc' : '#059669'};">
+                                    ${data.identity.worker_type === 'Banking Agent' ? '🏦' : '🚗'} ${data.identity.worker_type}
+                                </strong>
+                            </div>
+                        ` : ''}
                         <div class="info-item">
                             <span class="info-label">Name:</span>
                             <span class="info-value">${data.identity.name}</span>
@@ -475,6 +482,31 @@
                             <span class="info-label">Join Date:</span>
                             <span class="info-value">${data.employment.join_date}</span>
                         </div>
+                        ${data.employment.bank_name ? `
+                            <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0;">
+                                <h4 style="color: #2d3748; margin-bottom: 10px; font-size: 0.9rem;">
+                                    🏦 Banking Agent Details
+                                </h4>
+                                <div class="info-item">
+                                    <span class="info-label">Bank:</span>
+                                    <span class="info-value">${data.employment.bank_name}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Agent ID:</span>
+                                    <span class="info-value">${data.employment.agent_id || 'N/A'}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Authorization Expiry:</span>
+                                    <span class="info-value">${data.employment.authorization_expiry || 'N/A'}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">AePS Enabled:</span>
+                                    <span class="info-value" style="color: ${data.employment.aeps_enabled ? '#059669' : '#dc2626'}; font-weight: bold;">
+                                        ${data.employment.aeps_enabled ? '✓ Yes' : '✗ No'}
+                                    </span>
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
 
                     <div class="info-card">
@@ -499,6 +531,32 @@
                             <span class="info-label">Anomaly Rate:</span>
                             <span class="info-value">${data.safety.anomaly_rate.toFixed(1)}%</span>
                         </div>
+                        ${data.safety.government_context ? `
+                            <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0;">
+                                <h4 style="color: #2d3748; margin-bottom: 10px; font-size: 0.9rem;">
+                                    🏛️ Government Data Calibration
+                                </h4>
+                                <div class="info-item">
+                                    <span class="info-label">Operating State:</span>
+                                    <span class="info-value">${data.safety.government_context.state}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">State Accident Risk:</span>
+                                    <span class="info-value">${data.safety.government_context.state_risk_index}/100</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">2022 Accidents:</span>
+                                    <span class="info-value">${data.safety.government_context.total_accidents_2022.toLocaleString()}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Gov Data Contribution:</span>
+                                    <span class="info-value" style="color: #667eea; font-weight: bold;">+${data.safety.government_context.contributes_to_score.toFixed(1)} points</span>
+                                </div>
+                                <div style="background: #f7fafc; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 0.85rem; color: #4a5568;">
+                                    <strong>Source:</strong> ${data.safety.government_context.data_source}
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
 
                     <div class="info-card">

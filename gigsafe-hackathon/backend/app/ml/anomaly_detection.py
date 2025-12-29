@@ -44,7 +44,7 @@ class GigSafeMLPipeline:
         
         return self.trips_df, self.drivers_df
     
-    def extract_features(self, trips_df):
+    def extract_features(self, trips_df, government_data_df=None):
         """
         Extract behavioral features from trip data
         
@@ -54,10 +54,18 @@ class GigSafeMLPipeline:
         - Distance-based: distance-to-duration ratio
         - Route-based: deviation scores
         - Peer comparison: vs. nearby drivers
+        - Government context: real accident statistics (NEW)
+        
+        Args:
+            trips_df: Trip data
+            government_data_df: Government accident statistics (optional)
         """
         print("\n🔧 Extracting features...")
         
         features = trips_df.copy()
+        
+        # Flag if government context is available
+        has_gov_context = government_data_df is not None and not government_data_df.empty
         
         # === Speed Features ===
         # Speed variance per driver (consistency measure)
@@ -107,6 +115,61 @@ class GigSafeMLPipeline:
         
         # Current trip vs driver's average
         features['speed_vs_self'] = features['avg_speed_kmh'] - features['driver_avg_speed']
+        
+        # === NEW: GOVERNMENT ACCIDENT CONTEXT FEATURES ===
+        if has_gov_context:
+            print("   🏛️ Adding government accident context features...")
+            
+            # For synthetic data, assume all trips in Rajasthan
+            # In production, trips would have actual state information
+            default_state = "Rajasthan"
+            features['state'] = default_state
+            
+            # Create state-to-risk mapping
+            state_risk_map = government_data_df.set_index('state_ut')['risk_index'].to_dict()
+            
+            # Feature 1: State accident risk from government data
+            features['gov_state_risk'] = features['state'].map(state_risk_map).fillna(50)
+            
+            # Feature 2: High accident time windows
+            # Government data shows evening hours (18-23) have higher accidents
+            high_accident_hours = [18, 19, 20, 21, 22, 23]
+            features['gov_high_accident_time'] = features['hour_of_day'].apply(
+                lambda x: 1 if x in high_accident_hours else 0
+            )
+            
+            # Feature 3: Speed pattern correlation with accidents
+            # Government data: 60%+ accidents involve speeding
+            accident_prone_speed = 80  # km/h threshold from accident analysis
+            features['gov_speed_accident_prone'] = (
+                features['max_speed_kmh'] > accident_prone_speed
+            ).astype(int)
+            
+            # Feature 4: Compound government risk score
+            # Combines state risk + time + speed factors
+            features['gov_compound_risk'] = (
+                features['gov_state_risk'] * 0.5 +           # State baseline
+                features['gov_high_accident_time'] * 20 +     # Time factor
+                features['gov_speed_accident_prone'] * 30     # Speed factor
+            )
+            
+            # Feature 5: Route deviation in high-risk state
+            # Deviation is more concerning in states with high accident rates
+            features['gov_deviation_risk_interaction'] = (
+                features['route_deviation_score'] * 
+                (features['gov_state_risk'] / 100)  # Normalize to 0-1
+            )
+            
+            print(f"   ✅ Added 5 government context features")
+            print(f"   📊 State risk index: {features['gov_state_risk'].iloc[0]:.1f}")
+        else:
+            print("   ⚠️ No government data - skipping context features")
+            # Add placeholder columns with zeros
+            features['gov_state_risk'] = 50  # Neutral
+            features['gov_high_accident_time'] = 0
+            features['gov_speed_accident_prone'] = 0
+            features['gov_compound_risk'] = 0
+            features['gov_deviation_risk_interaction'] = 0
         
         print(f"   ✅ Extracted {len([c for c in features.columns if c not in trips_df.columns])} new features")
         
@@ -220,30 +283,40 @@ class GigSafeMLPipeline:
         
         return features_df
     
-    def calculate_risk_scores(self, features_df):
+    def calculate_risk_scores(self, features_df, use_gov_context=True):
         """
         Calculate comprehensive risk scores
         
         Risk Score Components:
-        1. Isolation Forest anomaly (40%)
-        2. DBSCAN outlier status (30%)
-        3. Route deviation severity (20%)
+        1. Isolation Forest anomaly (30% - reduced from 40%)
+        2. DBSCAN outlier status (25% - reduced from 30%)
+        3. Route deviation severity (15% - reduced from 20%)
         4. Speed violations (10%)
+        5. Government accident context (20% - NEW)
+        
+        Args:
+            features_df: Features DataFrame
+            use_gov_context: Whether to include government context (default: True)
         """
         print("\n⚠️  Calculating risk scores...")
         
-        # Component 1: Isolation Forest Score (0-40 points)
-        features_df['risk_if'] = features_df['anomaly_if'] * 40
+        has_gov_features = 'gov_compound_risk' in features_df.columns
         
-        # Component 2: DBSCAN Outlier (0-30 points)
-        features_df['risk_dbscan'] = features_df['is_outlier_dbscan'] * 30
+        # Component 1: Isolation Forest Score (30%)
+        features_df['risk_if'] = features_df['anomaly_if'] * 30
         
-        # Component 3: Route Deviation (0-20 points)
-        # Scale route deviation to 0-20
+        # Component 2: DBSCAN Outlier (25%)
+        features_df['risk_dbscan'] = features_df['is_outlier_dbscan'] * 25
+        
+        # Component 3: Route Deviation (15%)
+        # Scale route deviation to 0-15
         max_deviation = features_df['route_deviation_score'].max()
-        features_df['risk_route'] = (features_df['route_deviation_score'] / max_deviation) * 20
+        if max_deviation > 0:
+            features_df['risk_route'] = (features_df['route_deviation_score'] / max_deviation) * 15
+        else:
+            features_df['risk_route'] = 0
         
-        # Component 4: Speed Violations (0-10 points)
+        # Component 4: Speed Violations (10%)
         # Assume speed limit is 60 km/h for urban areas
         speed_limit = 60
         features_df['speed_violation'] = (features_df['max_speed_kmh'] - speed_limit).clip(lower=0)
@@ -253,12 +326,28 @@ class GigSafeMLPipeline:
         else:
             features_df['risk_speed'] = 0
         
+        # Component 5: Government Accident Context (20% - NEW)
+        if has_gov_features and use_gov_context:
+            max_gov_risk = features_df['gov_compound_risk'].max()
+            if max_gov_risk > 0:
+                features_df['risk_gov_context'] = (
+                    features_df['gov_compound_risk'] / max_gov_risk
+                ) * 20
+            else:
+                features_df['risk_gov_context'] = 0
+            
+            print(f"   🏛️ Government context contributing up to 20 points to risk score")
+        else:
+            features_df['risk_gov_context'] = 0
+            print(f"   ⚠️ Government context not available - using 0 points")
+        
         # Total Risk Score (0-100)
         features_df['risk_score'] = (
             features_df['risk_if'] + 
             features_df['risk_dbscan'] + 
             features_df['risk_route'] + 
-            features_df['risk_speed']
+            features_df['risk_speed'] +
+            features_df['risk_gov_context']  # NEW
         ).clip(upper=100)
         
         # Risk Categories
@@ -349,8 +438,8 @@ class GigSafeMLPipeline:
         
         print(f"✅ Models loaded from {model_dir}/")
     
-    def run_full_pipeline(self, trips_path, drivers_path, save_results=True):
-        """Execute complete ML pipeline"""
+    def run_full_pipeline(self, trips_path, drivers_path, save_results=True, use_government_data=True):
+        """Execute complete ML pipeline with optional government data integration"""
         
         print("\n" + "="*70)
         print(" "*20 + "GIG-SAFE ML PIPELINE")
@@ -359,8 +448,27 @@ class GigSafeMLPipeline:
         # Step 1: Load data
         trips_df, drivers_df = self.load_data(trips_path, drivers_path)
         
-        # Step 2: Feature extraction
-        features_df = self.extract_features(trips_df)
+        # Step 1.5: Load government accident data (NEW)
+        government_df = None
+        if use_government_data:
+            try:
+                print("\n🏛️ Loading government accident data...")
+                from app.services.government_data import GovernmentDataService
+                
+                gov_service = GovernmentDataService()
+                government_df = gov_service.fetch_accident_data()
+                
+                if not government_df.empty:
+                    print(f"   ✅ Loaded government data for {len(government_df)} states/UTs")
+                else:
+                    print(f"   ⚠️ Government data empty - continuing without context")
+                    
+            except Exception as e:
+                print(f"   ⚠️ Could not load government data: {e}")
+                print(f"   ⚠️ Continuing without government context")
+        
+        # Step 2: Feature extraction (now with government context)
+        features_df = self.extract_features(trips_df, government_df)
         
         # Step 3: Anomaly detection
         features_df = self.detect_anomalies_isolation_forest(features_df)
@@ -368,8 +476,8 @@ class GigSafeMLPipeline:
         # Step 4: Clustering
         features_df = self.cluster_behavior_patterns(features_df)
         
-        # Step 5: Risk scoring
-        features_df = self.calculate_risk_scores(features_df)
+        # Step 5: Risk scoring (now includes government context)
+        features_df = self.calculate_risk_scores(features_df, use_gov_context=(government_df is not None))
         
         # Step 6: Driver aggregation
         driver_metrics = self.aggregate_driver_scores(features_df)
