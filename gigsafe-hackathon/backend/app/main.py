@@ -9,8 +9,18 @@ import pickle
 from datetime import datetime
 import uvicorn
 import sys
+import random
+import logging
+
 sys.path.append('.')
 from app.services.government_data import GovernmentDataService
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -32,8 +42,8 @@ app.add_middleware(
 # DATA LOADING (Run once at startup)
 # ============================================================================
 
-print("🚀 Starting GIG-SAFE API...")
-print("📂 Loading data and models...")
+logger.info("🚀 Starting GIG-SAFE API...")
+logger.info("📂 Loading data and models...")
 
 # Load datasets
 try:
@@ -41,13 +51,13 @@ try:
     trips_df = pd.read_csv('data/processed/trip_analysis.csv')
     driver_risk_df = pd.read_csv('data/processed/driver_risk_scores.csv')
     
-    print(f"✅ Loaded {len(drivers_df)} drivers")
-    print(f"✅ Loaded {len(trips_df)} trips")
-    print(f"✅ Loaded {len(driver_risk_df)} driver risk scores")
+    logger.info(f"✅ Loaded {len(drivers_df)} drivers")
+    logger.info(f"✅ Loaded {len(trips_df)} trips")
+    logger.info(f"✅ Loaded {len(driver_risk_df)} driver risk scores")
     
 except Exception as e:
-    print(f"❌ Error loading data: {e}")
-    print("⚠️  Make sure you've run the data generation and training scripts!")
+    logger.error(f"❌ Error loading data: {e}")
+    logger.warning("⚠️  Make sure you've run the data generation and training scripts!")
     drivers_df = pd.DataFrame()
     trips_df = pd.DataFrame()
     driver_risk_df = pd.DataFrame()
@@ -63,16 +73,16 @@ try:
     with open('models/trained/scaler.pkl', 'rb') as f:
         scaler_model = pickle.load(f)
     
-    print("✅ Loaded ML models")
+    logger.info("✅ Loaded ML models")
     
 except Exception as e:
-    print(f"⚠️  Could not load ML models: {e}")
+    logger.warning(f"⚠️  Could not load ML models: {e}")
     isolation_forest_model = None
     dbscan_model = None
     scaler_model = None
 
-print("✅ GIG-SAFE API Ready!")
-print("=" * 60)
+logger.info("✅ GIG-SAFE API Ready!")
+logger.info("=" * 60)
 
 # ============================================================================
 # PYDANTIC MODELS (Data Validation)
@@ -82,7 +92,7 @@ class DriverIdentity(BaseModel):
     """Driver identity information"""
     name: str
     driver_id: str
-    worker_type: str  # NEW
+    worker_type: str
     aadhaar: str
     phone: str
     vehicle_number: str
@@ -221,10 +231,13 @@ def verify_driver(driver_id: str):
         Complete driver profile with identity, employment, safety, location, and government context
     """
     
+    logger.info(f"Verification request for driver: {driver_id}")
+    
     # Get driver information
     driver = get_driver_by_id(driver_id)
     
     if driver is None:
+        logger.warning(f"Driver not found: {driver_id}")
         raise HTTPException(
             status_code=404, 
             detail=f"Driver {driver_id} not found in database"
@@ -234,6 +247,7 @@ def verify_driver(driver_id: str):
     risk_info = get_driver_risk(driver_id)
     
     if risk_info is None:
+        logger.error(f"Risk information not available for: {driver_id}")
         raise HTTPException(
             status_code=404,
             detail=f"Risk information not available for driver {driver_id}"
@@ -247,6 +261,7 @@ def verify_driver(driver_id: str):
         last_lat, last_lon = 26.9124, 75.7873  # Jaipur center
         last_timestamp = datetime.now().isoformat()
         trip_status = "No trips yet"
+        logger.info(f"No trips found for {driver_id}, using default location")
     else:
         last_lat = float(last_trip['dropoff_lat'])
         last_lon = float(last_trip['dropoff_lon'])
@@ -262,10 +277,9 @@ def verify_driver(driver_id: str):
     else:
         risk_level = "High"
     
-    # NEW: Get government accident context
+    # Get government accident context
     government_context = None
     try:
-        from app.services.government_data import GovernmentDataService
         gov_service = GovernmentDataService()
         
         # Get Rajasthan data (where drivers operate)
@@ -288,8 +302,9 @@ def verify_driver(driver_id: str):
                 "data_source": "Government of India - Ministry of Road Transport",
                 "explanation": f"Driver operates in {state_info['state']} (accident risk index: {state_info['risk_index']}/100). Government data adds ~{round(gov_contribution, 1)} points to risk score."
             }
+            logger.info(f"Government context loaded for {driver_id}")
     except Exception as e:
-        print(f"Could not load government context: {e}")
+        logger.warning(f"Could not load government context for {driver_id}: {e}")
         government_context = None
     
     # Build response
@@ -297,17 +312,17 @@ def verify_driver(driver_id: str):
         identity=DriverIdentity(
             name=str(driver['name']),
             driver_id=str(driver['driver_id']),
-            worker_type=str(driver.get('worker_type', 'Delivery')),  # NEW
+            worker_type=str(driver.get('worker_type', 'Delivery')),
             aadhaar=str(driver['aadhaar']),
             phone=str(driver['phone']),
-            vehicle_number=str(driver['vehicle_number']),
-            vehicle_type=str(driver['vehicle_type'])
+            vehicle_number=str(driver['vehicle_number']) if pd.notna(driver.get('vehicle_number')) else 'N/A',
+            vehicle_type=str(driver['vehicle_type']) if pd.notna(driver.get('vehicle_type')) else 'Unknown'
         ),
         employment=EmploymentInfo(
             company=str(driver['company']),
             status="Active",  # In real system, check actual status
             join_date=str(driver['join_date']),
-            # Banking-specific fields (NEW)
+            # Banking-specific fields
             bank_name=str(driver['bank_name']) if pd.notna(driver.get('bank_name')) else None,
             agent_id=str(driver['agent_id']) if pd.notna(driver.get('agent_id')) else None,
             authorization_expiry=str(driver['authorization_expiry']) if pd.notna(driver.get('authorization_expiry')) else None,
@@ -330,6 +345,7 @@ def verify_driver(driver_id: str):
         )
     )
     
+    logger.info(f"Verification successful for {driver_id} - Risk Level: {risk_level}")
     return verification_response
 
 # ============================================================================
@@ -350,6 +366,7 @@ def get_dashboard_stats():
     """
     
     if drivers_df.empty or driver_risk_df.empty or trips_df.empty:
+        logger.error("Dashboard stats requested but data not loaded")
         raise HTTPException(
             status_code=503,
             detail="Data not loaded. Please run data generation and training scripts."
@@ -360,8 +377,7 @@ def get_dashboard_stats():
     
     # Simulate active trips (in real system, query current trips)
     # For demo: assume 40-50% of drivers are currently active
-    import random
-    random.seed(42)
+    random.seed(42)  # For consistent demo results
     active_trips = random.randint(int(total_drivers * 0.4), int(total_drivers * 0.5))
     
     # High risk drivers (risk score > 60)
@@ -388,6 +404,7 @@ def get_dashboard_stats():
         system_health=system_health
     )
     
+    logger.info(f"Dashboard stats generated - High Risk: {high_risk_count}, Anomalies: {total_anomalies}")
     return stats
 
 @app.get("/api/drivers/high-risk")
@@ -407,6 +424,7 @@ def get_high_risk_drivers(limit: int = 20):
     """
     
     if driver_risk_df.empty or drivers_df.empty:
+        logger.error("High-risk drivers requested but data not loaded")
         raise HTTPException(
             status_code=503,
             detail="Data not loaded"
@@ -423,7 +441,7 @@ def get_high_risk_drivers(limit: int = 20):
         if driver_info is not None:
             risk_score = float(risk_data['driver_risk_score'])
             
-            # Determine risk level
+            # Determine risk level (standardized thresholds)
             if risk_score >= 60:
                 risk_level = "High"
             elif risk_score >= 30:
@@ -435,15 +453,16 @@ def get_high_risk_drivers(limit: int = 20):
                 "driver_id": driver_id,
                 "name": str(driver_info['name']),
                 "company": str(driver_info['company']),
-                "vehicle_number": str(driver_info['vehicle_number']),
+                "vehicle_number": str(driver_info['vehicle_number']) if pd.notna(driver_info.get('vehicle_number')) else 'N/A',
                 "risk_score": round(risk_score, 2),
                 "risk_level": risk_level,
                 "total_trips": int(risk_data['total_trips']),
                 "anomalous_trips": int(risk_data['anomalous_trips']),
                 "anomaly_rate": round(float(risk_data['anomaly_rate']), 2),
-                "requires_action": risk_score > 50
+                "requires_action": risk_score > 60  # Standardized to match risk_level
             })
     
+    logger.info(f"Returned {len(result)} high-risk drivers")
     return {
         "count": len(result),
         "drivers": result
@@ -466,6 +485,7 @@ def get_recent_alerts(limit: int = 20):
     """
     
     if trips_df.empty or drivers_df.empty:
+        logger.error("Recent alerts requested but data not loaded")
         raise HTTPException(
             status_code=503,
             detail="Data not loaded"
@@ -475,6 +495,7 @@ def get_recent_alerts(limit: int = 20):
     anomalous_trips = trips_df[trips_df['anomaly_if'] == 1].copy()
     
     if anomalous_trips.empty:
+        logger.info("No anomalous trips found")
         return {
             "count": 0,
             "alerts": []
@@ -528,6 +549,7 @@ def get_recent_alerts(limit: int = 20):
                 }
             })
     
+    logger.info(f"Returned {len(alerts)} recent alerts")
     return {
         "count": len(alerts),
         "alerts": alerts
