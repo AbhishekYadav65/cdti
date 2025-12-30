@@ -1,3 +1,11 @@
+# TEAM NAME = ELARA
+
+## TEAM MEMBER 1 = ABHISHEK
+## TEAM MEMBER 2 = MILIND MAULA
+## TEAM MEMBER 3 = HARSH YADAV
+
+
+
 # 🛡️ GIG-SAFE: Intelligent Gig Worker Verification & Safety System
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
@@ -1106,27 +1114,6 @@ SOFTWARE.
 
 ---
 
-## 👥 Team
-
-**Built with ❤️ for India's Gig Economy**
-
-- **Lead Developer**: [Your Name]
-- **ML Engineer**: [Name]
-- **Security Architect**: [Name]
-- **UI/UX Designer**: [Name]
-
----
-
-## 📞 Contact
-
-- **Email**: gigsafe@example.com
-- **Website**: https://gigsafe.app
-- **GitHub**: https://github.com/your-org/gigsafe-hackathon
-- **Twitter**: @GigSafeIndia
-- **LinkedIn**: linkedin.com/company/gigsafe
-
----
-
 ## 🙏 Acknowledgments
 
 - **Ministry of Road Transport & Highways** - For providing accident data
@@ -1135,16 +1122,7 @@ SOFTWARE.
 - **FastAPI Community** - For excellent documentation
 - **Scikit-learn Team** - For ML libraries
 - **Open Source Community** - For making this possible
-
----
-
-## 📈 Statistics
-
-![GitHub stars](https://img.shields.io/github/stars/your-org/gigsafe-hackathon?style=social)
-![GitHub forks](https://img.shields.io/github/forks/your-org/gigsafe-hackathon?style=social)
-![GitHub issues](https://img.shields.io/github/issues/your-org/gigsafe-hackathon)
-![GitHub license](https://img.shields.io/github/license/your-org/gigsafe-hackathon)
-
+- 
 ---
 
 ## 🔗 Quick Links
@@ -1157,14 +1135,6 @@ SOFTWARE.
 - [License](#-license)
 
 ---
-
-<div align="center">
-
-**GIG-SAFE - Making India's Gig Economy Safer, One Verification at a Time** 🛡️
-
-Built for **Smart India Hackathon 2024** | **Problem Statement ID: SIH1234**
-
-[⭐ Star this repo](https://github.com/your-org/gigsafe-hackathon) | [🐛 Report Bug](https://github.com/your-org/gigsafe-hackathon/issues) | [✨ Request Feature](https://github.com/your-org/gigsafe-hackathon/issues)
 
 ---
 
@@ -1226,6 +1196,7 @@ Built for **Smart India Hackathon 2024** | **Problem Statement ID: SIH1234**
     │    - GIG-SAFE verification badge      │
     └───────────────────────────────────────┘
                             ↓
+                            
 ┌─────────────────────────────────────────────────────────────┐
 │ PHASE 6: FIELD VERIFICATION (2.3 seconds)                   │
 └─────────────────────────────────────────────────────────────┘
@@ -1239,9 +1210,11 @@ Built for **Smart India Hackathon 2024** | **Problem Statement ID: SIH1234**
     │    - Result: ✅ VERIFIED or 🚫 FAKE   │
     └───────────────────────────────────────┘
                             ↓
+                            
 ┌─────────────────────────────────────────────────────────────┐
 │ PHASE 7: CONTINUOUS MONITORING                              │
 └─────────────────────────────────────────────────────────────┘
                             ↓
+                            
     ┌───────────────────────────────────────┐
     │
