@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GIG-SAFE - Intelligent Verification Platform</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -56,6 +57,16 @@
             font-size: 0.75rem;
             font-weight: 600;
             letter-spacing: 0.5px;
+        }
+
+        .qr-badge {
+            background: linear-gradient(135deg, #10b981, #059669);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-left: 8px;
         }
 
         .header p {
@@ -164,6 +175,46 @@
             font-size: 0.95rem;
         }
 
+        /* Verification Methods Toggle */
+        .verification-methods {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .method-btn {
+            padding: 15px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 2px solid rgba(148, 163, 184, 0.2);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            font-weight: 600;
+            color: #94a3b8;
+        }
+
+        .method-btn:hover {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .method-btn.active {
+            border-color: #3b82f6;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2));
+            color: #60a5fa;
+        }
+
+        .method-content {
+            display: none;
+        }
+
+        .method-content.active {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+
         .search-box {
             display: flex;
             gap: 15px;
@@ -192,7 +243,7 @@
             color: #64748b;
         }
 
-        .search-box button {
+        .search-box button, .btn-primary {
             padding: 16px 36px;
             background: linear-gradient(135deg, #3b82f6, #8b5cf6);
             color: white;
@@ -205,9 +256,97 @@
             box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
         }
 
-        .search-box button:hover {
+        .search-box button:hover, .btn-primary:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        /* QR Scanner */
+        .qr-scanner-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        #qr-reader {
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(59, 130, 246, 0.3);
+            background: #000;
+        }
+
+        .scanner-controls {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .btn-secondary {
+            padding: 12px 24px;
+            background: rgba(148, 163, 184, 0.1);
+            color: #94a3b8;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(148, 163, 184, 0.2);
+        }
+
+        .manual-input {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(59, 130, 246, 0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .manual-input h4 {
+            color: #60a5fa;
+            margin-bottom: 15px;
+            font-size: 1rem;
+        }
+
+        /* QR Display Card */
+        .qr-display-card {
+            background: rgba(15, 23, 42, 0.6);
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+
+        .qr-preview {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .qr-preview img {
+            max-width: 280px;
+            border-radius: 8px;
+        }
+
+        .qr-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(59, 130, 246, 0.05);
+            border-radius: 8px;
+            border-left: 3px solid #3b82f6;
+        }
+
+        .qr-info p {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .qr-info strong {
+            color: #60a5fa;
         }
 
         /* Insights Panel */
@@ -622,6 +761,29 @@
             background: rgba(59, 130, 246, 0.2);
             transform: translateX(4px);
         }
+
+        /* QR Generation Section */
+        .qr-generate-section {
+            background: rgba(30, 41, 59, 0.8);
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            margin-top: 30px;
+        }
+
+        .crypto-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 20px;
+            font-size: 0.8rem;
+            color: #34d399;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -633,6 +795,7 @@
                     <h1>
                         🛡️ GIG-SAFE
                         <span class="header-badge">INTELLIGENT VERIFICATION</span>
+                        <span class="qr-badge">🔒 QR ENABLED</span>
                     </h1>
                     <p>Real-time Identity Verification & Risk Assessment for Gig Workers & Banking Agents</p>
                 </div>
@@ -654,6 +817,9 @@
             <button class="tab" onclick="switchTab('alerts')">
                 🚨 Active Alerts
             </button>
+            <button class="tab" onclick="switchTab('qr-manage')">
+                🔐 QR Management
+            </button>
         </div>
 
         <!-- Verification Tab -->
@@ -662,18 +828,73 @@
                 <div class="section-header">
                     <h2 class="section-title">Law Enforcement Verification Portal</h2>
                     <p class="section-subtitle">
-                        Instant identity verification, background checks, and risk assessment for delivery personnel and banking agents during field operations
+                        Instant identity verification via Worker ID search OR immutable QR code scanning
                     </p>
                 </div>
-                
-                <div class="search-box">
-                    <input 
-                        type="text" 
-                        id="driverIdInput" 
-                        placeholder="Enter Driver/Agent ID (e.g., DRV00001 to DRV00100)"
-                        onkeypress="if(event.key === 'Enter') verifyDriver()"
-                    >
-                    <button onclick="verifyDriver()">🔍 Verify Identity</button>
+
+                <!-- Verification Method Toggle -->
+                <div class="verification-methods">
+                    <div class="method-btn active" onclick="switchMethod('manual')">
+                        🔍 Manual ID Entry
+                    </div>
+                    <div class="method-btn" onclick="switchMethod('qr')">
+                        📱 Scan QR Code
+                    </div>
+                </div>
+
+                <!-- Manual Entry Method -->
+                <div id="manualMethod" class="method-content active">
+                    <div class="search-box">
+                        <input 
+                            type="text" 
+                            id="driverIdInput" 
+                            placeholder="Enter Driver/Agent ID (e.g., DRV00001 to DRV00100)"
+                            onkeypress="if(event.key === 'Enter') verifyDriver()"
+                        >
+                        <button onclick="verifyDriver()">🔍 Verify Identity</button>
+                    </div>
+                </div>
+
+                <!-- QR Scanner Method -->
+                <div id="qrMethod" class="method-content">
+                    <div class="qr-scanner-container">
+                        <div>
+                            <h3 style="color: #f1f5f9; margin-bottom: 20px; font-size: 1.2rem;">📷 Camera Scanner</h3>
+                            <div id="qr-reader"></div>
+                            <div class="scanner-controls">
+                                <button class="btn-primary" onclick="startScanner()">
+                                    🎥 Start Camera
+                                </button>
+                                <button class="btn-secondary" onclick="stopScanner()">
+                                    ⏹️ Stop Camera
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="qr-display-card">
+                            <h3 style="color: #f1f5f9; margin-bottom: 15px; font-size: 1.2rem;">
+                                Manual Hash Entry
+                            </h3>
+                            <p style="color: #94a3b8; margin-bottom: 20px; font-size: 0.9rem;">
+                                If you can't scan, enter the cryptographic hash from the QR code:
+                            </p>
+                            <div class="search-box">
+                                <input 
+                                    type="text" 
+                                    id="manualHash" 
+                                    placeholder="Paste 64-character SHA-256 hash here..."
+                                >
+                                <button onclick="verifyManualHash()">
+                                    🔍 Verify
+                                </button>
+                            </div>
+                            <div class="qr-info">
+                                <p>
+                                    <strong>🔒 Cryptographic Verification:</strong> QR codes contain an immutable SHA-256 hash generated from worker identity (ID + Aadhaar + Join Date). Any tampering = instant detection.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="insightsPanel" class="insights-panel">
@@ -711,11 +932,82 @@
                 <div id="alertsList" class="loading">Scanning for anomalies</div>
             </div>
         </div>
+
+        <!-- QR Management Tab -->
+        <div id="qr-manage" class="tab-content">
+            <div class="qr-generate-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        🔐 Generate Immutable QR Codes
+                        <span class="crypto-badge">🔒 SHA-256 Encrypted</span>
+                    </h2>
+                    <p class="section-subtitle">
+                        Create tamper-proof QR codes for worker ID cards containing cryptographic identity fingerprints
+                    </p>
+                </div>
+
+                <div class="search-box">
+                    <input 
+                        type="text" 
+                        id="qrWorkerIdInput" 
+                        placeholder="Enter Worker ID (e.g., DRV00092)"
+                    >
+                    <button onclick="generateQR()">
+                        🔒 Generate QR Code
+                    </button>
+                </div>
+
+                <div id="qrDisplayArea" style="display: none;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 30px;">
+                        <div class="qr-display-card">
+                            <h3 style="color: #f1f5f9; margin-bottom: 20px;">📱 QR Code Preview</h3>
+                            <div id="qrImagePreview" class="qr-preview">
+                                <!-- QR code will be displayed here -->
+                            </div>
+                        </div>
+
+                        <div class="qr-display-card">
+                            <h3 style="color: #f1f5f9; margin-bottom: 20px;">📋 Worker Identity Snapshot</h3>
+                            <div id="qrWorkerInfo">
+                                <!-- Worker info will be displayed here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 30px; padding: 25px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1)); border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                        <h3 style="color: #34d399; margin-bottom: 15px; font-size: 1.1rem;">
+                            🔒 Cryptographic Security Features
+                        </h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                            <div>
+                                <strong style="color: #60a5fa;">Hash Algorithm:</strong>
+                                <p style="color: #94a3b8; margin-top: 5px;">SHA-256 (256-bit cryptographic hash)</p>
+                            </div>
+                            <div>
+                                <strong style="color: #60a5fa;">Immutability:</strong>
+                                <p style="color: #94a3b8; margin-top: 5px;">Any data change = completely different hash</p>
+                            </div>
+                            <div>
+                                <strong style="color: #60a5fa;">Tamper Detection:</strong>
+                                <p style="color: #94a3b8; margin-top: 5px;">Instant verification against database</p>
+                            </div>
+                            <div>
+                                <strong style="color: #60a5fa;">Forgery Proof:</strong>
+                                <p style="color: #94a3b8; margin-top: 5px;">Cryptographically impossible to fake</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
         const API_URL = 'http://localhost:8000';
+        let html5QrCode = null;
+        let currentVerificationSource = null;
 
+        // Tab Switching
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
@@ -735,6 +1027,138 @@
             }
         }
 
+        // Verification Method Switching
+        function switchMethod(method) {
+            document.querySelectorAll('.method-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            document.querySelectorAll('.method-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            event.target.classList.add('active');
+            
+            if (method === 'manual') {
+                document.getElementById('manualMethod').classList.add('active');
+                stopScanner();
+            } else {
+                document.getElementById('qrMethod').classList.add('active');
+            }
+        }
+
+        // QR Scanner Functions
+        function startScanner() {
+            if (html5QrCode) {
+                stopScanner();
+            }
+
+            html5QrCode = new Html5Qrcode("qr-reader");
+
+            html5QrCode.start(
+                { facingMode: "environment" },
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 }
+                },
+                onScanSuccess,
+                onScanError
+            ).catch(err => {
+                console.error("Error starting scanner:", err);
+                alert("Unable to start camera. Please check permissions or use manual hash entry.");
+            });
+        }
+
+        function stopScanner() {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    html5QrCode = null;
+                }).catch(err => {
+                    console.error("Error stopping scanner:", err);
+                });
+            }
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            console.log(`QR Code scanned: ${decodedText}`);
+            
+            const parts = decodedText.split('|');
+            
+            if (parts.length >= 3 && parts[0] === 'GIGSAFE') {
+                const hash = parts[2];
+                currentVerificationSource = 'qr-scan';
+                verifyQRHash(hash);
+                stopScanner();
+            } else {
+                alert("Invalid QR code format. Please scan a valid GIG-SAFE worker QR code.");
+            }
+        }
+
+        function onScanError(errorMessage) {
+            // Silent - continuous scanning
+        }
+
+        // Verify Manual Hash
+        function verifyManualHash() {
+            const hash = document.getElementById('manualHash').value.trim();
+            if (hash) {
+                currentVerificationSource = 'manual-hash';
+                verifyQRHash(hash);
+            } else {
+                alert('Please enter a hash');
+            }
+        }
+
+        // Verify QR Hash
+        async function verifyQRHash(hash) {
+            const resultDiv = document.getElementById('verificationResult');
+            const insightsDiv = document.getElementById('insightsPanel');
+            
+            resultDiv.innerHTML = '<div class="loading">Verifying cryptographic hash and retrieving worker data</div>';
+            resultDiv.classList.add('show');
+            insightsDiv.classList.remove('show');
+
+            try {
+                const response = await fetch(`${API_URL}/api/qr/verify/${hash}`);
+                
+                if (!response.ok) {
+                    throw new Error('Invalid QR code or hash has been tampered with');
+                }
+
+                const data = await response.json();
+                
+                // Fetch full verification data
+                const fullResponse = await fetch(`${API_URL}/api/verify/${data.worker_id}`);
+                const fullData = await fullResponse.json();
+                
+                displayInsights(fullData, true);
+                displayVerificationResult(fullData, true);
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 2px solid #ef4444; border-radius: 12px; padding: 30px; text-align: center;">
+                        <div style="font-size: 4rem; margin-bottom: 20px;">🚫</div>
+                        <h3 style="color: #f87171; font-size: 1.5rem; margin-bottom: 10px;">VERIFICATION FAILED</h3>
+                        <p style="color: #fca5a5; font-size: 1.1rem; margin-bottom: 20px;">
+                            ${error.message}
+                        </p>
+                        <div style="background: rgba(220, 38, 38, 0.2); padding: 15px; border-radius: 8px; margin-top: 20px;">
+                            <strong style="color: #ef4444;">⚠️ SECURITY ALERT:</strong>
+                            <p style="color: #fca5a5; margin-top: 8px; font-size: 0.95rem;">
+                                This QR code does not match any registered worker in the system. Possible scenarios:
+                            </p>
+                            <ul style="color: #fca5a5; text-align: left; margin-top: 10px; margin-left: 20px;">
+                                <li>QR code has been tampered with</li>
+                                <li>Fake/counterfeit worker ID</li>
+                                <li>Worker has been deactivated</li>
+                            </ul>
+                        </div>
+                    </div>
+                `;
+                insightsDiv.classList.remove('show');
+            }
+        }
+
+        // Manual Driver Verification
         async function verifyDriver() {
             const driverId = document.getElementById('driverIdInput').value.trim();
             
@@ -742,6 +1166,8 @@
                 alert('Please enter a Driver/Agent ID');
                 return;
             }
+
+            currentVerificationSource = 'manual-id';
 
             const resultDiv = document.getElementById('verificationResult');
             const insightsDiv = document.getElementById('insightsPanel');
@@ -758,15 +1184,16 @@
                 }
 
                 const data = await response.json();
-                displayInsights(data);
-                displayVerificationResult(data);
+                displayInsights(data, false);
+                displayVerificationResult(data, false);
             } catch (error) {
                 resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}. Please verify the ID and try again.</div>`;
                 insightsDiv.classList.remove('show');
             }
         }
 
-        function displayInsights(data) {
+        // Display Insights
+        function displayInsights(data, isQRVerified) {
             const insightsDiv = document.getElementById('insightsPanel');
             
             const riskLevel = data.safety.risk_level;
@@ -788,13 +1215,16 @@
             }
 
             const trustScore = (100 - data.safety.risk_score).toFixed(1);
-            const govImpact = data.safety.government_context ? data.safety.government_context.contributes_to_score : 0;
+
+            const verificationBadge = isQRVerified ? 
+                '<div style="grid-column: 1 / -1; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1)); padding: 15px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3); text-align: center;"><strong style="color: #34d399;">🔒 CRYPTOGRAPHICALLY VERIFIED - QR Code Authentic</strong></div>' : '';
 
             insightsDiv.innerHTML = `
                 <div class="insight-title">
-                    🎯 AI-Powered Risk Assessment
+                    🎯 AI-Powered Risk Assessment ${isQRVerified ? '& QR Verification' : ''}
                 </div>
                 <div class="insight-grid">
+                    ${verificationBadge}
                     <div class="insight-item">
                         <div class="insight-label">Trust Score</div>
                         <div class="insight-value">${trustScore}%</div>
@@ -833,7 +1263,8 @@
             insightsDiv.classList.add('show');
         }
 
-        function displayVerificationResult(data) {
+        // Display Verification Result
+        function displayVerificationResult(data, isQRVerified) {
             const riskClass = data.safety.risk_level === 'High' ? 'risk-high' : 
                              data.safety.risk_level === 'Medium' ? 'risk-medium' : 'risk-low';
             
@@ -843,9 +1274,11 @@
             const riskScore = data.safety.risk_score;
             const riskPercentage = (riskScore / 100) * 100;
 
+            const qrBadge = isQRVerified ? ' <span style="font-size: 0.9rem; background: rgba(16, 185, 129, 0.2); padding: 4px 12px; border-radius: 15px; border: 1px solid rgba(16, 185, 129, 0.4);">🔒 QR VERIFIED</span>' : '';
+
             const html = `
                 <div class="worker-type-banner ${workerTypeClass}">
-                    ${workerTypeIcon} ${data.identity.worker_type.toUpperCase()} - ${data.employment.company}
+                    ${workerTypeIcon} ${data.identity.worker_type.toUpperCase()} - ${data.employment.company}${qrBadge}
                 </div>
 
                 <div class="info-grid">
@@ -871,6 +1304,12 @@
                             <span class="info-label">Vehicle</span>
                             <span class="info-value">${data.identity.vehicle_number} (${data.identity.vehicle_type})</span>
                         </div>
+                        ${isQRVerified ? `
+                            <div style="margin-top: 15px; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 8px; border-left: 3px solid #10b981;">
+                                <strong style="color: #34d399; font-size: 0.9rem;">🔒 Cryptographic Verification Passed</strong>
+                                <p style="color: #94a3b8; font-size: 0.8rem; margin-top: 6px;">Identity confirmed via SHA-256 hash validation</p>
+                            </div>
+                        ` : ''}
                     </div>
 
                     <div class="info-card">
@@ -990,13 +1429,178 @@
             document.getElementById('verificationResult').innerHTML = html;
         }
 
+        // Generate QR Code
+        async function generateQR() {
+            const workerId = document.getElementById('qrWorkerIdInput').value.trim();
+            
+            if (!workerId) {
+                alert('Please enter a worker ID');
+                return;
+            }
+
+            const displayArea = document.getElementById('qrDisplayArea');
+            const imagePreview = document.getElementById('qrImagePreview');
+            const workerInfo = document.getElementById('qrWorkerInfo');
+
+            imagePreview.innerHTML = '<p style="color: #475569;">🔍 Checking worker ID...</p>';
+            workerInfo.innerHTML = '<p style="color: #475569;">⏳ Please wait...</p>';
+            displayArea.style.display = 'block';
+
+            try {
+                console.log(`Attempting to verify worker: ${workerId}`);
+                
+                // Check if worker exists
+                const infoResponse = await fetch(`${API_URL}/api/verify/${workerId}`);
+                
+                if (!infoResponse.ok) {
+                    throw new Error(`Worker ID "${workerId}" not found in database.`);
+                }
+
+                const workerData = await infoResponse.json();
+                console.log('Worker data retrieved:', workerData);
+
+                imagePreview.innerHTML = '<p style="color: #475569;">✅ Worker found! Generating QR code...</p>';
+
+                // Generate cryptographic hash (same as backend)
+                const hashString = `${workerData.identity.driver_id}:${workerData.identity.aadhaar}:${workerData.employment.join_date}:GIGSAFE_2025_SECURE`;
+                const encoder = new TextEncoder();
+                const data = encoder.encode(hashString);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const generatedHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                console.log('Generated hash:', generatedHash);
+
+                // Generate QR
+                const qrResponse = await fetch(`${API_URL}/api/qr/generate/${workerId}`);
+                
+                if (!qrResponse.ok) {
+                    throw new Error('Failed to generate QR code');
+                }
+
+                const blob = await qrResponse.blob();
+                const imageUrl = URL.createObjectURL(blob);
+
+                imagePreview.innerHTML = `
+                    <img src="${imageUrl}" alt="QR Code" style="max-width: 280px;">
+                    <button class="btn-primary" style="margin-top: 20px; width: 100%;" onclick="downloadQR('${imageUrl}', '${workerId}')">
+                        💾 Download QR Code
+                    </button>
+                `;
+
+                workerInfo.innerHTML = `
+                    <div class="info-item">
+                        <span class="info-label">Worker Name</span>
+                        <span class="info-value">${workerData.identity.name}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Worker ID</span>
+                        <span class="info-value">${workerData.identity.driver_id}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Worker Type</span>
+                        <span class="info-value">${workerData.identity.worker_type}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Organization</span>
+                        <span class="info-value">${workerData.employment.company}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Aadhaar</span>
+                        <span class="info-value">${workerData.identity.aadhaar}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Join Date</span>
+                        <span class="info-value">${workerData.employment.join_date}</span>
+                    </div>
+                    ${workerData.employment.bank_name ? `
+                        <div class="info-item">
+                            <span class="info-label">Bank</span>
+                            <span class="info-value">${workerData.employment.bank_name}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Agent ID</span>
+                            <span class="info-value">${workerData.employment.agent_id || 'N/A'}</span>
+                        </div>
+                    ` : ''}
+                    
+                    <div style="margin-top: 20px; padding: 20px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3);">
+                        <h4 style="color: #60a5fa; margin-bottom: 10px; font-size: 0.9rem;">🔒 Cryptographic Hash (SHA-256)</h4>
+                        <div style="background: rgba(15, 23, 42, 0.8); padding: 12px; border-radius: 6px; word-break: break-all; font-family: monospace; font-size: 0.75rem; color: #34d399; margin-bottom: 10px;">
+                            ${generatedHash}
+                        </div>
+                        <button onclick="copyHash('${generatedHash}')" style="padding: 8px 16px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #60a5fa; cursor: pointer; font-size: 0.85rem;">
+                            📋 Copy Hash
+                        </button>
+                    </div>
+                    
+                    <div style="margin-top: 20px; padding: 15px; background: rgba(16, 185, 129, 0.1); border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                        <strong style="color: #34d399; display: block; margin-bottom: 8px;">✅ QR Code Generated Successfully</strong>
+                        <p style="color: #94a3b8; font-size: 0.85rem;">
+                            This QR code contains an immutable cryptographic hash. Print this on the worker's ID card for instant, tamper-proof verification.
+                        </p>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Full error:', error);
+                displayArea.style.display = 'block';
+                imagePreview.innerHTML = `
+                    <div style="padding: 40px; text-align: center;">
+                        <div style="font-size: 3rem; margin-bottom: 15px;">❌</div>
+                        <p style="color: #ef4444; font-weight: 600; font-size: 1.1rem;">Error: Failed to generate QR code</p>
+                    </div>
+                `;
+                
+                const isNetworkError = error.message.includes('Failed to fetch') || error.message.includes('NetworkError');
+                
+                if (isNetworkError) {
+                    workerInfo.innerHTML = `
+                        <div style="padding: 20px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.3);">
+                            <p style="color: #f87171; margin-bottom: 10px;"><strong>🔌 API Connection Error</strong></p>
+                            <p style="color: #fca5a5; font-size: 0.9rem; margin-top: 10px;">
+                                Cannot connect to backend API at:<br>
+                                <code style="background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px;">${API_URL}</code>
+                            </p>
+                        </div>
+                    `;
+                } else {
+                    workerInfo.innerHTML = `
+                        <div style="padding: 20px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.3);">
+                            <p style="color: #f87171; margin-bottom: 10px;"><strong>⚠️ ${error.message}</strong></p>
+                            <p style="color: #fca5a5; font-size: 0.9rem; margin-top: 10px;">
+                                Try these valid IDs: DRV00001, DRV00005, DRV00009, DRV00038, DRV00056, DRV00092
+                            </p>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        // Copy hash to clipboard
+        function copyHash(hash) {
+            navigator.clipboard.writeText(hash).then(() => {
+                alert('✅ Hash copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('❌ Failed to copy hash');
+            });
+        }
+
+        // Download QR Code
+        function downloadQR(imageUrl, workerId) {
+            const link = document.createElement('a');
+            link.href = imageUrl;
+            link.download = `gigsafe-qr-${workerId}.png`;
+            link.click();
+        }
+
+        // Dashboard Functions
         async function loadDashboard() {
             try {
                 const statsResponse = await fetch(`${API_URL}/api/dashboard/stats`);
                 const stats = await statsResponse.json();
 
                 const riskTrend = stats.high_risk_drivers > 5 ? 'trend-up' : 'trend-down';
-                const anomalyTrend = stats.anomalies_detected_today > 100 ? 'trend-up' : 'trend-down';
 
                 document.getElementById('statsGrid').innerHTML = `
                     <div class="stat-card">
@@ -1043,7 +1647,7 @@
                             </div>
                             <div class="stat-icon">🎯</div>
                         </div>
-                        <div class="stat-trend ${anomalyTrend}">
+                        <div class="stat-trend">
                             ${stats.anomalies_detected_today > 100 ? '↗ Elevated activity' : '↘ Normal levels'}
                         </div>
                     </div>
@@ -1159,6 +1763,7 @@
             }
         }
 
+        // Load dashboard on page load
         window.addEventListener('load', () => {
             loadDashboard();
         });

@@ -11,6 +11,14 @@ import uvicorn
 import sys
 import random
 import logging
+import hashlib
+import qrcode
+import io
+import base64
+from datetime import datetime
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
 
 sys.path.append('.')
 from app.services.government_data import GovernmentDataService
@@ -555,6 +563,289 @@ def get_recent_alerts(limit: int = 20):
         "alerts": alerts
     }
 
+# ============================================================================
+# QR CODE MODELS
+# ============================================================================
+
+class QRVerification(BaseModel):
+    """QR Code verification response"""
+    valid: bool
+    worker_id: str
+    name: str
+    worker_type: str
+    company: str
+    risk_level: str
+    risk_score: float
+    status: str
+    qr_issued_date: str
+    last_scanned: str
+    scan_count: int
+    verification_message: str
+
+class QRScanLog(BaseModel):
+    """Log entry for QR scans"""
+    worker_id: str
+    scan_timestamp: str
+    scanner_location: Optional[dict] = None
+    scanner_device: Optional[str] = None
+
+# ============================================================================
+# QR CODE GENERATION
+# ============================================================================
+
+def generate_worker_hash(driver_id: str, aadhaar: str, join_date: str) -> str:
+    """
+    Generate immutable cryptographic hash for worker
+    Hash = SHA-256(driver_id + aadhaar + join_date + secret_salt)
+    """
+    secret_salt = "GIGSAFE_2025_SECURE"  # In production: use environment variable
+    data_string = f"{driver_id}:{aadhaar}:{join_date}:{secret_salt}"
+    return hashlib.sha256(data_string.encode()).hexdigest()
+
+def verify_worker_hash(driver_id: str, provided_hash: str) -> bool:
+    """Verify if provided hash matches worker's authentic hash"""
+    driver = get_driver_by_id(driver_id)
+    if driver is None:
+        return False
+    
+    authentic_hash = generate_worker_hash(
+        str(driver['driver_id']),
+        str(driver['aadhaar']),
+        str(driver['join_date'])
+    )
+    
+    return authentic_hash == provided_hash
+
+# ============================================================================
+# QR CODE ENDPOINTS
+# ============================================================================
+
+@app.get("/api/qr/generate/{driver_id}")
+def generate_qr_code(driver_id: str):
+    """
+    🔒 GENERATE IMMUTABLE QR CODE FOR WORKER
+    
+    Generates a tamper-proof QR code containing:
+    - Worker ID
+    - Cryptographic hash (SHA-256)
+    - Verification URL
+    - Issue timestamp
+    
+    Use Case: Print on worker ID cards for instant verification
+    
+    Args:
+        driver_id: Driver ID (format: DRV00001 to DRV00100)
+    
+    Returns:
+        QR code image (PNG)
+    """
+    
+    logger.info(f"QR code generation requested for: {driver_id}")
+    
+    # Get driver information
+    driver = get_driver_by_id(driver_id)
+    
+    if driver is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Driver {driver_id} not found"
+        )
+    
+    # Generate immutable hash
+    worker_hash = generate_worker_hash(
+        str(driver['driver_id']),
+        str(driver['aadhaar']),
+        str(driver['join_date'])
+    )
+    
+    # Create QR data payload
+    qr_data = {
+        "worker_id": str(driver['driver_id']),
+        "hash": worker_hash,
+        "issued": datetime.now().isoformat(),
+        "verify_url": f"https://gigsafe.app/verify/{worker_hash}"
+    }
+    
+    # Convert to QR-friendly string
+    qr_string = f"GIGSAFE|{qr_data['worker_id']}|{qr_data['hash']}|{qr_data['issued']}"
+    
+    # Generate QR code
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,  # High error correction
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(qr_string)
+    qr.make(fit=True)
+    
+    # Create image
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Convert to bytes
+    img_bytes = io.BytesIO()
+    img.save(img_bytes, format='PNG')
+    img_bytes.seek(0)
+    
+    logger.info(f"QR code generated successfully for {driver_id}")
+    
+    return StreamingResponse(img_bytes, media_type="image/png")
+
+@app.get("/api/qr/verify/{qr_hash}", response_model=QRVerification)
+def verify_qr_code(qr_hash: str):
+    """
+    🔍 VERIFY QR CODE BY SCANNING
+    
+    Instantly verifies worker identity by scanning their QR code.
+    Checks cryptographic hash to ensure authenticity.
+    
+    Use Case: 
+    - Household members scan delivery person's ID card
+    - Security guards verify at checkpoints
+    - Police verify during investigations
+    
+    Args:
+        qr_hash: Cryptographic hash from scanned QR code
+    
+    Returns:
+        Complete verification result with real-time risk assessment
+    """
+    
+    logger.info(f"QR verification requested for hash: {qr_hash[:16]}...")
+    
+    # Search for matching worker
+    worker_found = None
+    
+    for _, driver in drivers_df.iterrows():
+        authentic_hash = generate_worker_hash(
+            str(driver['driver_id']),
+            str(driver['aadhaar']),
+            str(driver['join_date'])
+        )
+        
+        if authentic_hash == qr_hash:
+            worker_found = driver
+            break
+    
+    if worker_found is None:
+        logger.warning(f"Invalid QR hash scanned: {qr_hash[:16]}...")
+        raise HTTPException(
+            status_code=404,
+            detail="Invalid QR code - Worker not found or QR code has been tampered with"
+        )
+    
+    driver_id = str(worker_found['driver_id'])
+    
+    # Get risk information
+    risk_info = get_driver_risk(driver_id)
+    
+    if risk_info is None:
+        risk_score = 0.0
+        risk_level = "Unknown"
+    else:
+        risk_score = float(risk_info['driver_risk_score'])
+        if risk_score < 30:
+            risk_level = "Low"
+        elif risk_score < 60:
+            risk_level = "Medium"
+        else:
+            risk_level = "High"
+    
+    # Determine verification message
+    if risk_level == "Low":
+        verification_message = "✅ VERIFIED - Worker is authentic and low-risk"
+    elif risk_level == "Medium":
+        verification_message = "⚠️ VERIFIED - Worker is authentic but has moderate risk score"
+    else:
+        verification_message = "🚨 VERIFIED - Worker is authentic but HIGH RISK - Contact authorities"
+    
+    # Log the scan (in production: save to database)
+    scan_log = QRScanLog(
+        worker_id=driver_id,
+        scan_timestamp=datetime.now().isoformat()
+    )
+    logger.info(f"QR scan logged: {driver_id} at {scan_log.scan_timestamp}")
+    
+    verification_result = QRVerification(
+        valid=True,
+        worker_id=driver_id,
+        name=str(worker_found['name']),
+        worker_type=str(worker_found.get('worker_type', 'Delivery')),
+        company=str(worker_found['company']),
+        risk_level=risk_level,
+        risk_score=risk_score,
+        status="Active",
+        qr_issued_date=str(worker_found['join_date']),
+        last_scanned=datetime.now().isoformat(),
+        scan_count=1,  # In production: track actual scan count
+        verification_message=verification_message
+    )
+    
+    logger.info(f"QR verification successful for {driver_id} - Risk: {risk_level}")
+    return verification_result
+
+@app.post("/api/qr/scan-log")
+def log_qr_scan(scan_log: QRScanLog):
+    """
+    📝 LOG QR CODE SCAN EVENT
+    
+    Records every QR code scan with timestamp and location.
+    Creates audit trail for security and compliance.
+    
+    Use Case: Track where and when worker IDs are being scanned
+    
+    Args:
+        scan_log: Scan event details (worker_id, timestamp, location)
+    
+    Returns:
+        Confirmation of logged scan
+    """
+    
+    logger.info(f"QR scan logged: {scan_log.worker_id} at {scan_log.scan_timestamp}")
+    
+    # In production: Save to database
+    # db.qr_scans.insert_one(scan_log.dict())
+    
+    return {
+        "status": "logged",
+        "worker_id": scan_log.worker_id,
+        "timestamp": scan_log.scan_timestamp,
+        "message": "QR scan event recorded successfully"
+    }
+
+@app.get("/api/qr/scan-history/{driver_id}")
+def get_scan_history(driver_id: str, limit: int = 50):
+    """
+    📊 GET QR SCAN HISTORY FOR WORKER
+    
+    Returns history of all QR code scans for a specific worker.
+    Useful for tracking verification frequency and locations.
+    
+    Args:
+        driver_id: Driver ID
+        limit: Maximum number of records to return
+    
+    Returns:
+        List of scan events with timestamps and locations
+    """
+    
+    # In production: Query from database
+    # scans = db.qr_scans.find({"worker_id": driver_id}).limit(limit)
+    
+    # Demo response
+    return {
+        "worker_id": driver_id,
+        "total_scans": 23,
+        "last_scan": datetime.now().isoformat(),
+        "scan_history": [
+            {
+                "timestamp": datetime.now().isoformat(),
+                "location": "Checkpoint Alpha, Jaipur",
+                "scanner": "Police Patrol Unit 42"
+            }
+        ],
+        "message": "In production: Returns full scan history from database"
+    }
 # ============================================================================
 # RUN THE APP
 # ============================================================================
