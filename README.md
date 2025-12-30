@@ -110,7 +110,7 @@ Every worker receives a **tamper-proof QR code** containing a cryptographic hash
 │                                                             │
 │  ┌─────────────┐      ┌──────────────┐      ┌───────────┐ │
 │  │   Frontend  │◄────►│   FastAPI    │◄────►│  ML Engine│ │
-│  │   (React)   │      │   Backend    │      │  (sklearn)│ │
+│  │             │      │   Backend    │      │  (sklearn)│ │
 │  └─────────────┘      └──────────────┘      └───────────┘ │
 │         │                     │                     │       │
 │         │                     │                     │       │
